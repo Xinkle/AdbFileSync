@@ -1,0 +1,1 @@
+pyinstaller --onefile --name obsidian_sync app.py
