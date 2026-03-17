@@ -46,6 +46,40 @@ python3 app.py -i
 python3 app.py -c my_config.json
 ```
 
+## 설정 및 데이터 파일 형식
+
+AdbFileSync는 작업 디렉토리 또는 지정된 위치에 다음 두 가지 JSON 파일을 생성하여 상태를 관리합니다.
+
+### 1. 설정 파일 (`.adb_device_selection.json`)
+사용자가 선택한 기기 정보와 동기화할 폴더 경로를 저장합니다.
+
+```json
+{
+  "selected_device": {
+    "serial": "R3CN40AZXYZ",
+    "model": "SM-G991N"
+  },
+  "device_sync_dir": "/sdcard/Documents/Obsidian",
+  "local_sync_dir": "/home/user/Obsidian"
+}
+```
+
+### 2. 스냅샷 파일 (`.xync_snapshot.json`)
+이전 동기화 시점의 파일 상태(수정 시간, 크기)를 기록하여 삭제 여부를 판단하는 데 사용됩니다. 설정 파일과 동일한 디렉토리에 생성됩니다.
+
+```json
+{
+  "version": 1,
+  "files": {
+    "notes/meeting.md": {
+      "local": [1710650000, 1234],
+      "device": [1710650010, 1234]
+    }
+  }
+}
+```
+* `[mtime, size]` 형식으로 저장됩니다.
+
 ## 동기화 로직 상세
 
 이 도구는 다음과 같은 규칙으로 동기화를 수행합니다:
