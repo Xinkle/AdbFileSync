@@ -14,7 +14,14 @@ AdbFileSync는 Android 기기와 로컬 폴더 간의 파일을 ADB(Android Debu
 ## 사전 요구 사항
 
 1. **Python 3**: 시스템에 Python 3.x가 설치되어 있어야 합니다.
-2. **ADB (Android Debug Bridge)**:
+2. **가상환경 및 라이브러리 설정**:
+   본 프로젝트는 `.gitignore` 패턴 매칭을 위해 `pathspec` 라이브러리를 사용합니다. 아래 명령어로 가상환경을 설정하고 필요한 패키지를 설치하세요.
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate  # Windows: .venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+3. **ADB (Android Debug Bridge)**:
    - 시스템 `PATH`에 `adb`가 등록되어 있어야 합니다.
    - Android 기기에서 **개발자 옵션** 및 **USB 디버깅**이 활성화되어 있어야 합니다.
 
