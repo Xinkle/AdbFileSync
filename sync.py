@@ -44,6 +44,7 @@ def _format_plan_changed_only(
     local_map: Dict[str, Meta],
     dev_map: Dict[str, Meta],
     deletions: List[DeletionCandidate],
+    is_initial_sync: bool = False,
 ) -> str:
     """
     기본 변경 출력(동일은 출력 안 함):
@@ -56,6 +57,14 @@ def _format_plan_changed_only(
 
     삭제 후보는 별도 섹션으로 출력(항상 사용자 확인 필요).
     """
+    if is_initial_sync:
+        if not local_map and dev_map:
+            return f"Initial sync detected (empty local). \nWill PULL {len(dev_map)} files from device.\n"
+        if local_map and not dev_map:
+            return f"Initial sync detected (empty device). \nWill PUSH {len(local_map)} files to device.\n"
+        # Both empty or both have files (not a simple initial "move")
+        # fallback to normal diff if both have files but no snapshot
+
     lines: List[str] = ["Local - Device"]
     all_paths = sorted(set(local_map.keys()) | set(dev_map.keys()))
 
@@ -122,10 +131,16 @@ def build_sync_plan_once(
     store = SnapshotStore(snapshot_path)
     prev = store.load()
     deletions: List[DeletionCandidate] = []
+    is_initial_sync = False
+
     if prev is not None:
         deletions = SnapshotStore.compute_deletions(prev, local_map, dev_map)
+    else:
+        # No snapshot: check if one side is completely empty
+        if (not local_map and dev_map) or (local_map and not dev_map):
+            is_initial_sync = True
 
-    plan_text = _format_plan_changed_only(local_map, dev_map, deletions)
+    plan_text = _format_plan_changed_only(local_map, dev_map, deletions, is_initial_sync=is_initial_sync)
     return plan_text, local_map, dev_map, deletions
 
 
