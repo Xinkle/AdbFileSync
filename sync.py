@@ -55,8 +55,8 @@ def _format_plan_changed_only(
 ) -> str:
     """
     기본 변경 출력(동일은 출력 안 함):
-      - local only:      "{rel} > -Empty-"   (push)
-      - device only:     "-Empty- < {rel}"   (pull)
+      - local only:      "{rel} > -비어 있음-"   (push)
+      - device only:     "-비어 있음- < {rel}"   (pull)
       - both exist:
           - mtime diff:  "{rel} > {rel}" or "{rel} < {rel}"
           - mtime same:
@@ -66,20 +66,17 @@ def _format_plan_changed_only(
     """
     if is_initial_sync:
         if not local_map and dev_map:
-            return f"Initial sync detected (empty local). \nWill PULL {len(dev_map)} files from device.\n"
+            return f"최초 동기화 감지 (로컬 비어 있음). \n기기에서 {len(dev_map)}개의 파일을 가져옵니다(PULL).\n"
         if local_map and not dev_map:
-            return f"Initial sync detected (empty device). \nWill PUSH {len(local_map)} files to device.\n"
-        # Both empty or both have files (not a simple initial "move")
-        # fallback to normal diff if both have files but no snapshot
+            return f"최초 동기화 감지 (기기 비어 있음). \n로컬에서 {len(local_map)}개의 파일을 보냅니다(PUSH).\n"
 
-    lines: List[str] = ["Local - Device"]
+    lines: List[str] = ["로컬 - 디바이스"]
     all_paths = sorted(set(local_map.keys()) | set(dev_map.keys()))
 
     deletion_set_local_missing = {d.rel for d in deletions if d.local_missing}
     deletion_set_dev_missing = {d.rel for d in deletions if not d.local_missing}
 
     for rel in all_paths:
-        # 삭제 후보는 아래 섹션에서 따로 안내하므로 여기서는 기본 push/pull 표시를 억제
         if rel in deletion_set_local_missing or rel in deletion_set_dev_missing:
             continue
 
@@ -87,10 +84,10 @@ def _format_plan_changed_only(
         in_d = rel in dev_map
 
         if in_l and not in_d:
-            lines.append(f"{rel} > -Empty-")
+            lines.append(f"{rel} > -비어 있음-")
             continue
         if not in_l and in_d:
-            lines.append(f"-Empty- < {rel}")
+            lines.append(f"-비어 있음- < {rel}")
             continue
 
         (lm, ls) = local_map[rel]
@@ -103,21 +100,18 @@ def _format_plan_changed_only(
         else:
             if ls != ds:
                 lines.append(f"{rel} ! {rel}")  # conflict
-            # else identical -> no output
 
     if deletions:
         lines.append("")
-        lines.append("Deletions (need confirmation)")
+        lines.append("삭제 후보 (확인 필요)")
         for d in deletions:
             if d.local_missing:
-                # 로컬에서 삭제 추정: 디바이스도 삭제? 아니면 복구(pull)?
-                lines.append(f"[LOCAL deleted?] {d.rel}  (delete on device? else restore local)")
+                lines.append(f"[로컬에서 삭제됨?] {d.rel}  (기기에서도 삭제하시겠습니까? 아니면 로컬로 복구?)")
             else:
-                # 디바이스에서 삭제 추정: 로컬도 삭제? 아니면 복구(push)?
-                lines.append(f"[DEVICE deleted?] {d.rel}  (delete on local? else restore device)")
+                lines.append(f"[기기에서 삭제됨?] {d.rel}  (로컬에서도 삭제하시겠습니까? 아니면 기기로 복구?)")
 
     if len(lines) == 1:
-        return "Local - Device\n(no changes)\n"
+        return "로컬 - 디바이스\n(변경 사항 없음)\n"
     return "\n".join(lines) + "\n"
 
 
@@ -127,10 +121,6 @@ def build_sync_plan_once(
     local_dir: Path,
     snapshot_path: Path,
 ):
-    """
-    Returns (plan_text, local_map, dev_map, deletions)
-    Note: dev_map already excludes .obsidian/.trash in adb_helper via find -prune.
-    """
     local_dir.mkdir(parents=True, exist_ok=True)
     local_map = _local_list_files_meta(local_dir)
     dev_map = adb_helper.adb_list_files_meta(serial, device_dir)
@@ -143,7 +133,6 @@ def build_sync_plan_once(
     if prev is not None:
         deletions = SnapshotStore.compute_deletions(prev, local_map, dev_map)
     else:
-        # No snapshot: check if one side is completely empty
         if (not local_map and dev_map) or (local_map and not dev_map):
             is_initial_sync = True
 
@@ -151,13 +140,9 @@ def build_sync_plan_once(
     return plan_text, local_map, dev_map, deletions
 
 
-# ------------------------
-# Execution layer (push/pull/delete)
-# ------------------------
-
 @dataclass(frozen=True)
 class Action:
-    kind: str  # "push" | "pull" | "conflict" | "local_deleted" | "device_deleted"
+    kind: str
     rel: str
 
 
@@ -173,7 +158,6 @@ def _compute_actions(
     all_paths = sorted(set(local_map.keys()) | set(dev_map.keys()) | deletion_local_missing | deletion_dev_missing)
 
     for rel in all_paths:
-        # 삭제 후보는 별도 액션으로
         if rel in deletion_local_missing:
             actions.append(Action("local_deleted", rel))
             continue
@@ -203,7 +187,6 @@ def _compute_actions(
         else:
             if ls != ds:
                 actions.append(Action("conflict", rel))
-            # else identical -> no action
 
     return actions
 
@@ -212,7 +195,6 @@ def _ensure_device_parent_dir(serial: str, device_path: str) -> None:
     parent = device_path.rsplit("/", 1)[0] if "/" in device_path else device_path
     if not parent:
         return
-    # adb shell은 문자열 파싱이라, 단일 문자열 + sh_quote가 가장 안정적
     parent_q = adb_helper.sh_quote(parent)
     adb_helper.run(["adb", "-s", serial, "shell", f"mkdir -p {parent_q}"], timeout=20)
 
@@ -230,7 +212,6 @@ def _adb_pull(serial: str, device_path: str, local_path: Path, device_mtime: Opt
     _ensure_local_parent_dir(local_path)
     adb_helper.run(["adb", "-s", serial, "pull", device_path, str(local_path)], timeout=180)
 
-    # adb pull often sets mtime to "now" -> fix it using device mtime we already collected
     if device_mtime is not None:
         try:
             os.utime(local_path, (device_mtime, device_mtime))
@@ -260,13 +241,13 @@ def _choose_conflict_policy_per_file(rel: str, remembered: Optional[str]) -> str
         return remembered
 
     while True:
-        print(f"\n⚠️  Conflict: {rel}")
-        print("Choose which version to keep:")
-        print("  L) keep LOCAL  (push local -> device)")
-        print("  D) keep DEVICE (pull device -> local)")
-        print("  S) skip (do nothing)")
-        print("  A) apply choice to ALL remaining conflicts (you will be asked once)")
-        choice = input("Select [L/D/S/A]: ").strip().lower()
+        print(f"\n⚠️  충돌 발생: {rel}")
+        print("유지할 버전을 선택하세요:")
+        print("  L) 로컬 파일 유지 (로컬 -> 기기로 전송)")
+        print("  D) 기기 파일 유지 (기기 -> 로컬로 전송)")
+        print("  S) 건너뛰기 (아무 작업도 하지 않음)")
+        print("  A) 이후 모든 충돌에 대해 현재 선택 적용 (한 번 더 확인)")
+        choice = input("선택 [L/D/S/A]: ").strip().lower()
 
         if choice in ("l", "local"):
             return "local"
@@ -276,15 +257,15 @@ def _choose_conflict_policy_per_file(rel: str, remembered: Optional[str]) -> str
             return "skip"
         if choice == "a":
             while True:
-                g = input("Apply which policy to ALL conflicts? [L/D/S]: ").strip().lower()
+                g = input("나머지 모든 충돌에 어떤 정책을 적용할까요? [L/D/S]: ").strip().lower()
                 if g in ("l", "local"):
                     return "local_apply_all"
                 if g in ("d", "device"):
                     return "device_apply_all"
                 if g in ("s", "skip"):
                     return "skip_apply_all"
-                print("Invalid. Please choose L/D/S.")
-        print("Invalid. Please choose L/D/S/A.")
+                print("잘못된 선택입니다. L/D/S 중 하나를 선택하세요.")
+        print("잘못된 선택입니다. L/D/S/A 중 하나를 선택하세요.")
 
 
 def _device_path_join(root: str, rel: str) -> str:
@@ -300,7 +281,7 @@ def main(store: Optional[ConfigStore] = None) -> int:
     sync_cfg = store.get_sync_config()
 
     if sync_cfg is None:
-        print("Sync config is not initialized. Run device/folder selection first.")
+        print("동기화 설정이 초기화되지 않았습니다. 기기 및 폴더 선택을 먼저 실행해주세요.")
         return 2
 
     serial = sync_cfg.device.serial
@@ -308,55 +289,52 @@ def main(store: Optional[ConfigStore] = None) -> int:
     local_dir = Path(sync_cfg.local_sync_dir)
 
     if not adb_helper.adb_available():
-        print("adb not available on PATH.")
+        print("adb를 실행할 수 없습니다. PATH 설정을 확인하세요.")
         return 2
 
     serials = adb_helper.list_connected_serials()
     if serial not in serials:
-        print(f"Device not connected/authorized: {serial}")
-        print(f"Connected: {serials}")
+        print(f"기기가 연결되지 않았거나 승인되지 않았습니다: {serial}")
+        print(f"연결된 기기: {serials}")
         return 3
 
-    # snapshot path: config 파일명에 기반하여 생성 (예: .config.json -> .config.json.snapshot)
     snapshot_path = store.path.parent / (store.path.name + ".snapshot")
 
-    print(f"Device: {serial} ({sync_cfg.device.model})")
-    print(f"Device dir: {device_dir}")
-    print(f"Local  dir: {local_dir}")
-    print(f"Snapshot : {snapshot_path}\n")
+    print(f"기기     : {serial} ({sync_cfg.device.model})")
+    print(f"기기 경로 : {device_dir}")
+    print(f"로컬 경로 : {local_dir}")
+    print(f"스냅샷   : {snapshot_path}\n")
 
     plan_text, local_map, dev_map, deletions = build_sync_plan_once(
         serial, device_dir, local_dir, snapshot_path
     )
 
     print(plan_text)
-    print(f"Local files : {len(local_map)}")
-    print(f"Device files: {len(dev_map)}")
-    print(f"Deletions   : {len(deletions)}")
+    print(f"로컬 파일 수 : {len(local_map)}")
+    print(f"기기 파일 수 : {len(dev_map)}")
+    print(f"삭제 후보 수 : {len(deletions)}")
 
     actions = _compute_actions(local_map, dev_map, deletions)
     if not actions:
-        print("\nNo changes.")
-
-        # 스냅샷만 갱신(최초 실행 시 삭제 추정 방지 목적)
+        print("\n변경 사항이 없습니다.")
         SnapshotStore(snapshot_path).save(local_map, dev_map)
         return 0
 
     pushes = sum(1 for a in actions if a.kind == "push")
     pulls = sum(1 for a in actions if a.kind == "pull")
     conflicts = sum(1 for a in actions if a.kind == "conflict")
-    del_local = sum(1 for a in actions if a.kind == "device_deleted")  # device에서 삭제 추정 -> 로컬 삭제 여부 질문
-    del_dev = sum(1 for a in actions if a.kind == "local_deleted")     # local에서 삭제 추정 -> 디바이스 삭제 여부 질문
+    del_local = sum(1 for a in actions if a.kind == "device_deleted")
+    del_dev = sum(1 for a in actions if a.kind == "local_deleted")
 
-    print("\nSummary:")
-    print(f"  push           : {pushes}")
-    print(f"  pull           : {pulls}")
-    print(f"  conflict       : {conflicts}")
-    print(f"  local deleted? : {del_dev}  (ask: delete on device or restore local)")
-    print(f"  device deleted?: {del_local} (ask: delete on local or restore device)")
+    print("\n요약:")
+    print(f"  보내기(push)   : {pushes}")
+    print(f"  가져오기(pull)  : {pulls}")
+    print(f"  충돌(conflict) : {conflicts}")
+    print(f"  로컬 삭제됨?    : {del_dev}  (기기에서 삭제하거나 로컬로 복구)")
+    print(f"  기기 삭제됨?    : {del_local} (로컬에서 삭제하거나 기기로 복구)")
 
-    if not _prompt_yes_no("\nProceed with sync (push/pull/delete)? (y/N): "):
-        print("Aborted.")
+    if not _prompt_yes_no("\n동기화(전송/삭제)를 진행하시겠습니까? (y/N): "):
+        print("중단되었습니다.")
         return 0
 
     remembered_conflict_policy: Optional[str] = None
@@ -369,13 +347,13 @@ def main(store: Optional[ConfigStore] = None) -> int:
         try:
             if a.kind == "push":
                 if not local_path.exists():
-                    print(f"[SKIP] local missing: {rel}")
+                    print(f"[건너뜀] 로컬 파일 없음: {rel}")
                     continue
-                print(f"[PUSH] {rel}")
+                print(f"[보내기] {rel}")
                 _adb_push(serial, local_path, device_path)
 
             elif a.kind == "pull":
-                print(f"[PULL] {rel}")
+                print(f"[가져오기] {rel}")
                 device_mtime = dev_map.get(rel, (None, None))[0]
                 _adb_pull(serial, device_path, local_path, device_mtime=device_mtime)
 
@@ -394,58 +372,53 @@ def main(store: Optional[ConfigStore] = None) -> int:
 
                 if decision == "local":
                     if not local_path.exists():
-                        print(f"[SKIP-CONFLICT] local missing: {rel}")
+                        print(f"[충돌-건너뜀] 로컬 파일 없음: {rel}")
                         continue
-                    print(f"[CONFLICT->LOCAL] push {rel}")
+                    print(f"[충돌->로컬] 보내기 {rel}")
                     _adb_push(serial, local_path, device_path)
                 elif decision == "device":
-                    print(f"[CONFLICT->DEVICE] pull {rel}")
+                    print(f"[충돌->기기] 가져오기 {rel}")
                     device_mtime = dev_map.get(rel, (None, None))[0]
                     _adb_pull(serial, device_path, local_path, device_mtime=device_mtime)
                 else:
-                    print(f"[CONFLICT-SKIP] {rel}")
+                    print(f"[충돌-건너뜀] {rel}")
 
             elif a.kind == "local_deleted":
-                # 로컬이 사라졌고(삭제 추정), 디바이스에는 남아있음
-                print(f"[LOCAL deleted?] {rel}")
-                if _prompt_yes_no("Delete on DEVICE as well? (y/N): "):
-                    print(f"[DELETE-DEVICE] {rel}")
+                print(f"[로컬 삭제됨?] {rel}")
+                if _prompt_yes_no("기기에서도 삭제하시겠습니까? (y/N): "):
+                    print(f"[기기삭제] {rel}")
                     _adb_delete_device_file(serial, device_path)
                 else:
-                    # 복구(pull)
-                    print(f"[RESTORE-LOCAL] pull {rel}")
+                    print(f"[로컬복구] 가져오기 {rel}")
                     device_mtime = dev_map.get(rel, (None, None))[0]
                     _adb_pull(serial, device_path, local_path, device_mtime=device_mtime)
 
             elif a.kind == "device_deleted":
-                # 디바이스가 사라졌고(삭제 추정), 로컬에는 남아있음
-                print(f"[DEVICE deleted?] {rel}")
-                if _prompt_yes_no("Delete on LOCAL as well? (y/N): "):
-                    print(f"[DELETE-LOCAL] {rel}")
+                print(f"[기기 삭제됨?] {rel}")
+                if _prompt_yes_no("로컬에서도 삭제하시겠습니까? (y/N): "):
+                    print(f"[로컬삭제] {rel}")
                     _delete_local_file(local_path)
                 else:
-                    # 복구(push)
                     if not local_path.exists():
-                        print(f"[SKIP-RESTORE] local missing unexpectedly: {rel}")
+                        print(f"[복구-건너뜀] 로컬 파일이 예기치 않게 없습니다: {rel}")
                         continue
-                    print(f"[RESTORE-DEVICE] push {rel}")
+                    print(f"[기기복구] 보내기 {rel}")
                     _adb_push(serial, local_path, device_path)
 
             else:
-                print(f"[SKIP] unknown action: {a.kind} {rel}")
+                print(f"[건너뜀] 알 수 없는 동작: {a.kind} {rel}")
 
         except Exception as e:
-            print(f"[ERROR] {a.kind.upper()} {rel}: {e}")
+            print(f"[오류] {a.kind.upper()} {rel}: {e}")
 
-    # 최종 상태 스냅샷 갱신(정확도 위해 재스캔)
     try:
         final_local = _local_list_files_meta(local_dir)
         final_dev = adb_helper.adb_list_files_meta(serial, device_dir)
         SnapshotStore(snapshot_path).save(final_local, final_dev)
     except Exception as e:
-        print(f"[WARN] snapshot save failed: {e}")
+        print(f"[경고] 스냅샷 저장 실패: {e}")
 
-    print("\nDone.")
+    print("\n완료되었습니다.")
     return 0
 
 
