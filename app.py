@@ -188,7 +188,7 @@ def main() -> int:
 
     # ✅ 설정이 끝났으면 바로 수동 sync 실행
     print("\n수동 동기화를 실행합니다...\n")
-    return sync.main()  # sync.py의 main() 실행 (plan 출력 후 종료)
+    return sync.main(store)  # sync.py의 main(store) 실행
 
 
 if __name__ == "__main__":
