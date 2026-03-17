@@ -278,8 +278,10 @@ def _device_path_join(root: str, rel: str) -> str:
     return f"{root}/{rel}" if rel else root
 
 
-def main() -> int:
-    store = ConfigStore.default()
+def main(store: Optional[ConfigStore] = None) -> int:
+    if store is None:
+        store = ConfigStore.default()
+        
     sync_cfg = store.get_sync_config()
 
     if sync_cfg is None:
