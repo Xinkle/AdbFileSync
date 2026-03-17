@@ -30,6 +30,7 @@ class SyncConfig:
     device: SelectedDevice
     device_sync_dir: str
     local_sync_dir: str
+    ignore_git: bool = False
 
 
 class ConfigStore:
@@ -102,6 +103,7 @@ class ConfigStore:
 
         ddir = cfg.get("device_sync_dir")
         ldir = cfg.get("local_sync_dir")
+        ignore_git = bool(cfg.get("ignore_git", False))
 
         if not isinstance(ddir, str) or not ddir.strip():
             return None
@@ -112,6 +114,7 @@ class ConfigStore:
             device=device,
             device_sync_dir=ddir.strip(),
             local_sync_dir=ldir.strip(),
+            ignore_git=ignore_git,
         )
 
     def is_fully_initialized(self) -> bool:

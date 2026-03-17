@@ -20,9 +20,9 @@ Meta = Tuple[int, int]  # (mtime, size)
 
 
 # {rel_path: (mtime, size)}
-def _local_list_files_meta(local_root: Path) -> Dict[str, Meta]:
+def _local_list_files_meta(local_root: Path, ignore_git: bool = False) -> Dict[str, Meta]:
     result: Dict[str, Meta] = {}
-    ignore_manager = GitIgnoreManager(local_root)
+    ignore_manager = GitIgnoreManager(local_root, ignore_git=ignore_git)
     
     for p in local_root.rglob("*"):
         if not p.is_file():
@@ -120,9 +120,10 @@ def build_sync_plan_once(
     device_dir: str,
     local_dir: Path,
     snapshot_path: Path,
+    ignore_git: bool = False,
 ):
     local_dir.mkdir(parents=True, exist_ok=True)
-    local_map = _local_list_files_meta(local_dir)
+    local_map = _local_list_files_meta(local_dir, ignore_git=ignore_git)
     dev_map = adb_helper.adb_list_files_meta(serial, device_dir)
 
     store = SnapshotStore(snapshot_path)
@@ -306,7 +307,7 @@ def main(store: Optional[ConfigStore] = None) -> int:
     print(f"스냅샷   : {snapshot_path}\n")
 
     plan_text, local_map, dev_map, deletions = build_sync_plan_once(
-        serial, device_dir, local_dir, snapshot_path
+        serial, device_dir, local_dir, snapshot_path, ignore_git=sync_cfg.ignore_git
     )
 
     print(plan_text)
@@ -412,7 +413,7 @@ def main(store: Optional[ConfigStore] = None) -> int:
             print(f"[오류] {a.kind.upper()} {rel}: {e}")
 
     try:
-        final_local = _local_list_files_meta(local_dir)
+        final_local = _local_list_files_meta(local_dir, ignore_git=sync_cfg.ignore_git)
         final_dev = adb_helper.adb_list_files_meta(serial, device_dir)
         SnapshotStore(snapshot_path).save(final_local, final_dev)
     except Exception as e:
