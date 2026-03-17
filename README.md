@@ -68,9 +68,11 @@ AdbFileSync는 작업 디렉토리 또는 지정된 위치에 다음 두 가지 
     "model": "SM-G991N"
   },
   "device_sync_dir": "/sdcard/Documents/Obsidian",
-  "local_sync_dir": "/home/user/Obsidian"
+  "local_sync_dir": "/home/user/Obsidian",
+  "ignore_git": true
 }
 ```
+* `ignore_git`: (선택 사항) `true`로 설정하면 `.git` 폴더와 그 하위 내용을 동기화 대상에서 제외합니다. 기본값은 `false`입니다.
 
 ### 2. 스냅샷 파일 (`[설정파일명].snapshot`)
 이전 동기화 시점의 파일 상태(수정 시간, 크기)를 기록하여 삭제 여부를 판단하는 데 사용됩니다. 사용 중인 설정 파일명 뒤에 `.snapshot`이 붙은 형태로 생성됩니다. (예: `.adb_device_selection.json.snapshot`)

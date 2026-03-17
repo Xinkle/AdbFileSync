@@ -11,8 +11,9 @@ class GitIgnoreManager:
     Respects hierarchical rules: subdirectories can override/add rules.
     """
 
-    def __init__(self, root_dir: Path):
+    def __init__(self, root_dir: Path, ignore_git: bool = False):
         self.root_dir = root_dir.resolve()
+        self.ignore_git = ignore_git
         # Dict[dir_path, Optional[pathspec.PathSpec]]
         self.spec_cache: Dict[Path, Optional[pathspec.PathSpec]] = {}
 
@@ -42,6 +43,12 @@ class GitIgnoreManager:
         Checks if the given path is ignored by any .gitignore file from root to its directory.
         """
         abs_path = path.resolve()
+
+        # Hardcoded check for .git directory if enabled
+        if self.ignore_git:
+            if ".git" in abs_path.parts:
+                return True
+
         try:
             # Need to get path relative to root_dir for matching
             rel_path = abs_path.relative_to(self.root_dir)
