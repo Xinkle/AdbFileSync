@@ -293,8 +293,8 @@ def main() -> int:
         print(f"Connected: {serials}")
         return 3
 
-    # snapshot path: config 파일과 같은 폴더에 저장
-    snapshot_path = store.path.parent / ".xync_snapshot.json"
+    # snapshot path: config 파일명에 기반하여 생성 (예: .config.json -> .config.json.snapshot)
+    snapshot_path = store.path.parent / (store.path.name + ".snapshot")
 
     print(f"Device: {serial} ({sync_cfg.device.model})")
     print(f"Device dir: {device_dir}")
