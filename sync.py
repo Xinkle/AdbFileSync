@@ -10,6 +10,7 @@ from typing import Dict, Tuple, List, Optional, Set
 import adb_helper
 from config_store import ConfigStore
 from snapshot_store import SnapshotStore, DeletionCandidate
+from ignore_manager import GitIgnoreManager
 
 # adb_helper.py에서 이미 device-side prune(.obsidian/.trash)을 수행하므로,
 # 여기서는 local-side만 동일 규칙으로 제외하면 충분합니다.
@@ -21,15 +22,21 @@ Meta = Tuple[int, int]  # (mtime, size)
 # {rel_path: (mtime, size)}
 def _local_list_files_meta(local_root: Path) -> Dict[str, Meta]:
     result: Dict[str, Meta] = {}
+    ignore_manager = GitIgnoreManager(local_root)
+    
     for p in local_root.rglob("*"):
         if not p.is_file():
             continue
 
         rel = p.relative_to(local_root).as_posix()
 
-        # ignore .obsidian / .trash and their descendants
+        # 1. ignore .obsidian / .trash and their descendants (legacy rule)
         first = rel.split("/", 1)[0]
         if first in IGNORE_DIR_NAMES:
+            continue
+            
+        # 2. ignore by .gitignore rules (new feature)
+        if ignore_manager.is_ignored(p):
             continue
 
         try:
